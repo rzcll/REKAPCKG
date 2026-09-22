@@ -201,10 +201,13 @@
                     </h3>
                     
                     <div class="flex flex-wrap items-center gap-3">
-                        <div id="totalSheetsBadge" class="bg-white/80 text-primary-800 border border-primary-200 px-4 py-2 rounded-xl text-sm font-bold shadow-sm backdrop-blur-md">
+                        <div id="totalSheetsBadge" class="bg-white/85 text-primary-900 border border-primary-300 px-4 py-2 rounded-xl text-sm font-extrabold shadow-sm backdrop-blur-md">
                             0 Tab Ditemukan
                         </div>
-                        <button id="btnExport" class="bg-primary-600 hover:bg-primary-700 text-white px-5 py-2 rounded-xl text-sm font-bold shadow-md shadow-primary-600/20 transition-all flex items-center gap-2 group">
+                        <button id="btnRefresh" class="bg-teal-500 hover:bg-teal-600 text-white px-5 py-2.5 rounded-xl text-sm font-extrabold shadow-md shadow-teal-500/25 transition-all flex items-center gap-2 group">
+                            <i class="fas fa-sync-alt group-hover:rotate-180 transition-transform duration-500"></i> Refresh
+                        </button>
+                        <button id="btnExport" class="bg-primary-600 hover:bg-primary-700 text-white px-5 py-2.5 rounded-xl text-sm font-extrabold shadow-md shadow-primary-600/25 transition-all flex items-center gap-2 group">
                             <i class="fas fa-file-excel group-hover:scale-110 transition-transform"></i> Export Excel
                         </button>
                     </div>
@@ -223,7 +226,7 @@
         // ==============================================================================
         // GANTI URL DI BAWAH INI DENGAN URL WEB APP GOOGLE APPS SCRIPT ANDA YANG BARU!
         // ==============================================================================
-        const GOOGLE_APP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzK9SVAOlJZGXcriOrv19n6MVaC435bG2jyqi5hTNfj4PFVkD5fX_V_gMWCQDzxJJ3L/exec'; // <-- GANTI INI
+        const GOOGLE_APP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwtinMvv9lKE2xF3gO8ytaGB3dAMwkvFeSiN_esd8O9zDt8-TwCbTikD2SrwLN4YRSC/exec'; // <-- GANTI INI
         
         // Element DOM
         const loginView = document.getElementById('loginView');
@@ -253,6 +256,7 @@
         const sheetsContainer = document.getElementById('sheetsContainer');
         const totalSheetsBadge = document.getElementById('totalSheetsBadge');
         const btnLogout = document.getElementById('btnLogout');
+        const btnRefresh = document.getElementById('btnRefresh');
         const btnExport = document.getElementById('btnExport');
         
         // Toast elements
@@ -377,6 +381,7 @@
                 displayUsername.textContent = activeUsername;
                 sheetLink.href = activeTargetUrl;
                 
+                // TAMPILKAN SEMUA DATA (TERMASUK YANG CAPAIANNYA 0) DI GRAFIK & TABEL
                 renderChart(currentSheetsData);
                 renderTable(currentSheetsData);
 
@@ -388,6 +393,7 @@
         }
 
         // Handle Logout
+
         btnLogout.addEventListener('click', () => {
             if(!confirm("Yakin ingin keluar?")) return;
             
@@ -429,17 +435,49 @@
             XLSX.writeFile(workbook, `Rekap_Etiket_${activeUsername}_${today}.xlsx`);
         });
 
+        // Handle Refresh Data
+        btnRefresh.addEventListener('click', async () => {
+            btnRefresh.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memuat...';
+            btnRefresh.disabled = true;
+
+            try {
+                const response = await fetch(`${GOOGLE_APP_SCRIPT_URL}?action=process&url=${encodeURIComponent(activeTargetUrl)}`);
+                const result = await response.json();
+
+                if (result.success) {
+                    result.sheets.sort((a, b) => b.count - a.count);
+                    currentSheetsData = result.sheets;
+                    
+                    const chartData = currentSheetsData.filter(sheet => sheet.count > 0);
+                    
+                    renderChart(chartData);
+                    renderTable(currentSheetsData);
+                    
+                    toastMsg.textContent = "Data berhasil diperbarui!";
+                    toast.classList.remove('translate-x-[120%]', 'opacity-0');
+                    setTimeout(() => toast.classList.add('translate-x-[120%]', 'opacity-0'), 3000);
+                } else {
+                    alert("Error saat merefresh data: " + result.message);
+                }
+            } catch (error) {
+                alert("Gagal merefresh data. Coba lagi.");
+            } finally {
+                btnRefresh.innerHTML = '<i class="fas fa-sync-alt group-hover:rotate-180 transition-transform duration-500"></i> Refresh';
+                btnRefresh.disabled = false;
+            }
+        });
         function renderChart(sheets) {
             const ctx = document.getElementById('barChart').getContext('2d');
             if(chartInstance) chartInstance.destroy();
 
-            const chartData = sheets.slice(0, 15);
+            // Menghapus batasan slice agar SEMUA tab muncul tanpa terkecuali
+            const chartData = sheets; 
             const labels = chartData.map(s => s.name.length > 15 ? s.name.substring(0, 15) + '...' : s.name);
             const counts = chartData.map(s => s.count);
 
             const gradient = ctx.createLinearGradient(0, 0, 0, 400);
-            gradient.addColorStop(0, 'rgba(16, 185, 129, 0.9)'); // Emerald Solid
-            gradient.addColorStop(1, 'rgba(16, 185, 129, 0.2)'); // Emerald Transparan
+            gradient.addColorStop(0, 'rgba(16, 185, 129, 0.9)');
+            gradient.addColorStop(1, 'rgba(16, 185, 129, 0.2)');
 
             chartInstance = new Chart(ctx, {
                 type: 'bar',
@@ -461,7 +499,7 @@
                     plugins: {
                         legend: { display: false },
                         tooltip: {
-                            backgroundColor: 'rgba(4, 120, 87, 0.9)', // Dark emerald
+                            backgroundColor: 'rgba(4, 120, 87, 0.9)',
                             titleFont: { family: "'Plus Jakarta Sans', sans-serif" },
                             bodyFont: { family: "'Plus Jakarta Sans', sans-serif", weight: 'bold' },
                             padding: 12,
@@ -485,7 +523,8 @@
         }
 
         function renderTable(sheets) {
-            totalSheetsBadge.innerHTML = `<i class="fas fa-layer-group mr-1.5"></i> ${sheets.length} Tab Ditemukan`;
+            // Mengubah teks badge agar lebih akurat
+            totalSheetsBadge.innerHTML = `<i class="fas fa-layer-group mr-1.5"></i> ${sheets.length} Tab Berisi Data`;
 
             let tableHTML = `
                 <div class="overflow-x-auto">
