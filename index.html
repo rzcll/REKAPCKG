@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem PEMBACA ETIKET CKG</title>
+    
+    <!-- Fonts & Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['"Plus Jakarta Sans"', 'sans-serif'] },
+                    colors: {
+                        primary: {
+                            50: '#ecfdf5',  // Hijau sangat muda
+                            100: '#d1fae5',
+                            500: '#10b981', // Emerald 500
+                            600: '#059669', // Emerald 600
+                            700: '#047857', // Emerald 700
+                            800: '#065f46',
+                        }
+                    },
+                    animation: { 'blob': 'blob 7s infinite' },
+                    keyframes: {
+                        blob: {
+                            '0%': { transform: 'translate(0px, 0px) scale(1)' },
+                            '33%': { transform: 'translate(30px, -50px) scale(1.1)' },
+                            '66%': { transform: 'translate(-20px, 20px) scale(0.9)' },
+                            '100%': { transform: 'translate(0px, 0px) scale(1)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #f0fdf4; /* Background dasar hijau super muda */
+            background-image: radial-gradient(#d1fae5 1.5px, transparent 1.5px);
+            background-size: 30px 30px;
+        }
+        
+        /* Efek Kaca Transparan Hijau Muda */
+        .glass-panel {
+            background: rgba(236, 253, 245, 0.7); /* ecfdf5 dengan transparansi */
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(16, 185, 129, 0.3); /* Border hijau transparan */
+            box-shadow: 0 10px 40px -10px rgba(4, 120, 87, 0.15); /* Shadow hijau lembut */
+        }
+        
+        /* Efek khusus untuk tabel agar menyatu dengan tema */
+        .glass-table-container {
+            background: rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+    </style>
+</head>
+<body class="text-slate-800 min-h-screen flex flex-col relative overflow-x-hidden">
+
+    <!-- Animasi Blob Latar Belakang (Nuansa Hijau) -->
+    <div class="fixed top-0 left-0 w-full h-full overflow-hidden -z-10 pointer-events-none">
+        <div class="absolute top-0 -left-4 w-72 h-72 bg-primary-300 rounded-full mix-blend-multiply filter blur-2xl opacity-40 animate-blob"></div>
+        <div class="absolute top-0 -right-4 w-72 h-72 bg-teal-300 rounded-full mix-blend-multiply filter blur-2xl opacity-40 animate-blob animation-delay-2000"></div>
+        <div class="absolute -bottom-8 left-20 w-72 h-72 bg-green-300 rounded-full mix-blend-multiply filter blur-2xl opacity-40 animate-blob animation-delay-4000"></div>
+    </div>
+
+    <!-- Notifikasi Toast -->
+    <div id="toast" class="fixed top-6 right-6 z-50 transform transition-all duration-300 translate-x-[120%] opacity-0">
+        <div class="glass-panel px-6 py-4 rounded-2xl flex items-center gap-3 border-l-4 border-l-primary-600">
+            <div class="w-8 h-8 bg-primary-100 text-primary-700 rounded-full flex items-center justify-center shadow-sm">
+                <i class="fas fa-check"></i>
+            </div>
+            <div>
+                <h4 class="font-bold text-primary-800 text-sm">Berhasil</h4>
+                <p id="toastMsg" class="text-xs text-primary-600 font-medium">Disalin ke clipboard</p>
+            </div>
+        </div>
+    </div>
+
+    <main class="flex-grow flex flex-col items-center p-6 sm:p-12 w-full max-w-6xl mx-auto">
+        
+        <!-- ================= 1. HALAMAN LOGIN ================= -->
+        <div id="loginView" class="w-full max-w-md mt-10 transition-all duration-500 opacity-100">
+            <div class="text-center mb-8">
+                <div class="w-16 h-16 bg-gradient-to-tr from-primary-700 to-primary-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-primary-600/30">
+                    <i class="fas fa-leaf text-white text-3xl"></i>
+                </div>
+                <h1 class="text-3xl font-extrabold text-primary-800 tracking-tight">Portal CKG</h1>
+                <p class="text-primary-600/80 mt-2 text-sm font-medium">Masuk dengan username Anda</p>
+            </div>
+
+            <div class="glass-panel rounded-3xl p-8">
+                <form id="loginForm" class="space-y-6">
+                    <div>
+                        <label for="username" class="block text-sm font-bold text-primary-800 mb-2">Username</label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                <i class="fas fa-user text-primary-400"></i>
+                            </div>
+                            <input type="text" id="username" required autocomplete="off"
+                                class="w-full pl-11 pr-4 py-3.5 bg-white/80 border border-primary-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all shadow-sm text-sm text-primary-900 placeholder-primary-300"
+                                placeholder="Ketik username Anda...">
+                        </div>
+                    </div>
+
+                    <div id="errorMessage" class="hidden bg-red-50/90 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm flex items-start gap-3">
+                        <i class="fas fa-circle-exclamation mt-0.5"></i>
+                        <span id="errorText">Error pesan disini.</span>
+                    </div>
+
+                    <button type="submit" id="btnSubmit" 
+                        class="w-full bg-primary-600 hover:bg-primary-700 text-white font-bold py-3.5 px-4 rounded-xl transition-all shadow-lg shadow-primary-500/30 flex items-center justify-center gap-2 group">
+                        <span id="btnText">Verifikasi</span>
+                        <i id="btnIcon" class="fas fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
+                        <i id="loadingIcon" class="fas fa-circle-notch fa-spin hidden"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- ================= 2. HALAMAN PROSES DATA ================= -->
+        <div id="processView" class="w-full max-w-lg hidden mt-10 transition-all duration-500 opacity-0 translate-y-4">
+            <div class="glass-panel rounded-3xl p-10 text-center">
+                <div class="w-20 h-20 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-6 text-primary-600 text-4xl shadow-inner border border-primary-200">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <h2 class="text-2xl font-extrabold text-primary-800 mb-2">Login Berhasil!</h2>
+                <p class="text-primary-600 text-sm mb-8">Selamat datang, <span id="welcomeUser" class="font-bold text-primary-700">User</span>. Dokumen sumber data Anda telah ditemukan dan siap dianalisis.</p>
+                
+                <button id="btnProcess" class="w-full bg-primary-700 hover:bg-primary-800 text-white font-extrabold py-4 px-6 rounded-2xl transition-all shadow-xl shadow-primary-600/20 flex items-center justify-center gap-3 group text-lg">
+                    <span id="btnProcessText">PROSES DATA SEKARANG</span>
+                    <i id="btnProcessIcon" class="fas fa-database group-hover:scale-110 transition-transform"></i>
+                    <i id="btnProcessLoading" class="fas fa-cog fa-spin hidden"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- ================= 3. HALAMAN DASHBOARD (HASIL) ================= -->
+        <div id="dashboardView" class="w-full hidden transition-all duration-700 opacity-0 translate-y-4">
+            
+            <!-- Navbar Atas -->
+            <div class="glass-panel rounded-3xl p-5 mb-8 flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 bg-gradient-to-br from-primary-500 to-teal-500 rounded-xl flex items-center justify-center shadow-lg shadow-primary-500/20">
+                        <i class="fas fa-chart-pie text-white text-xl"></i>
+                    </div>
+                    <div>
+                        <h2 class="font-extrabold text-xl text-primary-900">Rekapitulasi Etiket</h2>
+                        <p class="text-xs text-primary-600 font-semibold">User Aktif: <span id="displayUsername" class="text-primary-800 font-bold uppercase">User</span></p>
+                    </div>
+                </div>
+                
+                <button id="btnLogout" class="text-primary-700 hover:text-white hover:bg-red-500 px-4 py-2.5 rounded-xl transition-all text-sm font-bold flex items-center gap-2 border border-primary-200 hover:border-red-500 shadow-sm">
+                    <i class="fas fa-power-off"></i> Keluar
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+                <!-- Area Grafik (Kiri, lebih lebar) -->
+                <div class="lg:col-span-2 glass-panel rounded-3xl p-6 sm:p-8">
+                    <h3 class="text-lg font-bold text-primary-800 mb-6 flex items-center gap-2">
+                        <i class="fas fa-chart-column text-primary-600"></i> Distribusi Kode Unik
+                    </h3>
+                    <div class="relative w-full h-[300px]">
+                        <canvas id="barChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Info Panel (Kanan) -->
+                <div class="glass-panel rounded-3xl p-6 sm:p-8 flex flex-col justify-center text-center">
+                    <div class="w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-4 text-primary-600 text-2xl border border-primary-200">
+                        <i class="fas fa-link"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-primary-800 mb-2">Tautan Sumber Data</h3>
+                    <p class="text-sm text-primary-600 mb-6">Tautan spreadsheet berhasil ditarik dari Master Data.</p>
+                    <a id="sheetLink" href="#" target="_blank" class="w-full bg-white text-primary-700 font-bold py-3 px-4 rounded-xl border-2 border-primary-100 hover:border-primary-500 hover:text-primary-600 transition-all shadow-sm flex items-center justify-center gap-2">
+                        Buka Spreadsheet <i class="fas fa-external-link-alt"></i>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Area Tabel Data -->
+            <div>
+                <div class="flex flex-col sm:flex-row justify-between items-end sm:items-center mb-6 gap-4 px-2">
+                    <h3 class="text-xl font-extrabold text-primary-900 flex items-center gap-3">
+                        <i class="fas fa-table-list text-primary-600"></i> Detail Tab & Kode
+                    </h3>
+                    
+                    <div class="flex flex-wrap items-center gap-3">
+                        <div id="totalSheetsBadge" class="bg-white/80 text-primary-800 border border-primary-200 px-4 py-2 rounded-xl text-sm font-bold shadow-sm backdrop-blur-md">
+                            0 Tab Ditemukan
+                        </div>
+                        <button id="btnExport" class="bg-primary-600 hover:bg-primary-700 text-white px-5 py-2 rounded-xl text-sm font-bold shadow-md shadow-primary-600/20 transition-all flex items-center gap-2 group">
+                            <i class="fas fa-file-excel group-hover:scale-110 transition-transform"></i> Export Excel
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Kontainer Tabel Glassmorphism -->
+                <div id="sheetsContainer" class="glass-table-container rounded-3xl overflow-hidden shadow-lg">
+                    <!-- Tabel dirender via JS -->
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        // ==============================================================================
+        // GANTI URL DI BAWAH INI DENGAN URL WEB APP GOOGLE APPS SCRIPT ANDA YANG BARU!
+        // ==============================================================================
+        const GOOGLE_APP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzK9SVAOlJZGXcriOrv19n6MVaC435bG2jyqi5hTNfj4PFVkD5fX_V_gMWCQDzxJJ3L/exec'; // <-- GANTI INI
+        
+        // Element DOM
+        const loginView = document.getElementById('loginView');
+        const processView = document.getElementById('processView');
+        const dashboardView = document.getElementById('dashboardView');
+        
+        // Login elements
+        const loginForm = document.getElementById('loginForm');
+        const usernameInput = document.getElementById('username');
+        const btnSubmit = document.getElementById('btnSubmit');
+        const btnText = document.getElementById('btnText');
+        const btnIcon = document.getElementById('btnIcon');
+        const loadingIcon = document.getElementById('loadingIcon');
+        const errorMessage = document.getElementById('errorMessage');
+        const errorText = document.getElementById('errorText');
+        
+        // Process elements
+        const welcomeUser = document.getElementById('welcomeUser');
+        const btnProcess = document.getElementById('btnProcess');
+        const btnProcessText = document.getElementById('btnProcessText');
+        const btnProcessIcon = document.getElementById('btnProcessIcon');
+        const btnProcessLoading = document.getElementById('btnProcessLoading');
+
+        // Dashboard elements
+        const displayUsername = document.getElementById('displayUsername');
+        const sheetLink = document.getElementById('sheetLink');
+        const sheetsContainer = document.getElementById('sheetsContainer');
+        const totalSheetsBadge = document.getElementById('totalSheetsBadge');
+        const btnLogout = document.getElementById('btnLogout');
+        const btnExport = document.getElementById('btnExport');
+        
+        // Toast elements
+        const toast = document.getElementById('toast');
+        const toastMsg = document.getElementById('toastMsg');
+
+        // Variables
+        let chartInstance = null; 
+        let currentSheetsData = []; 
+        let activeUsername = "";
+        let activeTargetUrl = "";
+
+        // ================= 1. PROSES LOGIN (Cepat) =================
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = usernameInput.value.trim();
+            if (!username) return;
+
+            setLoginLoading(true);
+            
+            try {
+                const response = await fetch(`${GOOGLE_APP_SCRIPT_URL}?action=login&username=${encodeURIComponent(username)}`);
+                const result = await response.json();
+
+                if (result.success) {
+                    activeUsername = result.username;
+                    activeTargetUrl = result.url;
+                    
+                    // Transisi ke Halaman Proses
+                    loginView.classList.replace('opacity-100', 'opacity-0');
+                    setTimeout(() => {
+                        loginView.classList.add('hidden');
+                        processView.classList.remove('hidden');
+                        welcomeUser.textContent = activeUsername.toUpperCase();
+                        
+                        setTimeout(() => {
+                            processView.classList.replace('opacity-0', 'opacity-100');
+                            processView.classList.remove('translate-y-4');
+                        }, 50);
+                    }, 500);
+
+                } else {
+                    showError(result.message);
+                }
+            } catch (error) {
+                showError("Gagal menghubungi server. Periksa koneksi internet.");
+            } finally {
+                setLoginLoading(false);
+            }
+        });
+
+        // ================= 2. KLIK PROSES DATA (Loading Utama) =================
+        btnProcess.addEventListener('click', async () => {
+            setProcessLoading(true);
+
+            try {
+                // Memanggil backend untuk action=process
+                const response = await fetch(`${GOOGLE_APP_SCRIPT_URL}?action=process&url=${encodeURIComponent(activeTargetUrl)}`);
+                const result = await response.json();
+
+                if (result.success) {
+                    showDashboard(result.sheets);
+                } else {
+                    alert("Error saat memproses data: " + result.message);
+                    setProcessLoading(false);
+                }
+            } catch (error) {
+                alert("Gagal memproses data. Coba lagi.");
+                setProcessLoading(false);
+            }
+        });
+
+        // ================= FUNGSI BANTUAN UI =================
+        function setLoginLoading(isLoading) {
+            usernameInput.disabled = isLoading;
+            btnSubmit.disabled = isLoading;
+            errorMessage.classList.add('hidden');
+            if (isLoading) {
+                btnText.textContent = 'Memverifikasi...';
+                btnIcon.classList.add('hidden');
+                loadingIcon.classList.remove('hidden');
+            } else {
+                btnText.textContent = 'Verifikasi';
+                btnIcon.classList.remove('hidden');
+                loadingIcon.classList.add('hidden');
+            }
+        }
+
+        function setProcessLoading(isLoading) {
+            btnProcess.disabled = isLoading;
+            if (isLoading) {
+                btnProcessText.textContent = 'MEMBACA DOKUMEN...';
+                btnProcessIcon.classList.add('hidden');
+                btnProcessLoading.classList.remove('hidden');
+                btnProcess.classList.add('animate-pulse');
+            } else {
+                btnProcessText.textContent = 'PROSES DATA SEKARANG';
+                btnProcessIcon.classList.remove('hidden');
+                btnProcessLoading.classList.add('hidden');
+                btnProcess.classList.remove('animate-pulse');
+            }
+        }
+
+        function showError(msg) {
+            errorText.textContent = msg;
+            errorMessage.classList.remove('hidden');
+            loginView.classList.add('animate-pulse');
+            setTimeout(() => loginView.classList.remove('animate-pulse'), 500);
+        }
+
+        // ================= 3. RENDER DASHBOARD =================
+        function showDashboard(sheetsData) {
+            // Urutkan data berdasarkan jumlah (terbanyak di atas/kiri)
+            sheetsData.sort((a, b) => b.count - a.count);
+            currentSheetsData = sheetsData;
+
+            processView.classList.replace('opacity-100', 'opacity-0');
+            setTimeout(() => {
+                processView.classList.add('hidden');
+                dashboardView.classList.remove('hidden');
+                
+                displayUsername.textContent = activeUsername;
+                sheetLink.href = activeTargetUrl;
+                
+                renderChart(currentSheetsData);
+                renderTable(currentSheetsData);
+
+                setTimeout(() => {
+                    dashboardView.classList.replace('opacity-0', 'opacity-100');
+                    dashboardView.classList.remove('translate-y-4');
+                }, 50);
+            }, 500);
+        }
+
+        // Handle Logout
+        btnLogout.addEventListener('click', () => {
+            if(!confirm("Yakin ingin keluar?")) return;
+            
+            dashboardView.classList.replace('opacity-100', 'opacity-0');
+            dashboardView.classList.add('translate-y-4');
+            
+            // Reset status
+            activeUsername = "";
+            activeTargetUrl = "";
+            currentSheetsData = [];
+            setProcessLoading(false);
+            usernameInput.value = '';
+
+            setTimeout(() => {
+                dashboardView.classList.add('hidden');
+                loginView.classList.remove('hidden');
+                setTimeout(() => {
+                    loginView.classList.replace('opacity-0', 'opacity-100');
+                }, 50);
+            }, 500);
+        });
+
+        // Handle Export Excel
+        btnExport.addEventListener('click', () => {
+            if (!currentSheetsData || currentSheetsData.length === 0) return;
+
+            const worksheetData = currentSheetsData.map((sheet, index) => ({
+                "No": index + 1,
+                "Nama Tab/Sheet": sheet.name,
+                "Jumlah Kode Unik": sheet.count
+            }));
+
+            const worksheet = XLSX.utils.json_to_sheet(worksheetData);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Data Etiket");
+            worksheet['!cols'] = [ { wch: 5 }, { wch: 40 }, { wch: 20 } ];
+
+            const today = new Date().toISOString().split('T')[0];
+            XLSX.writeFile(workbook, `Rekap_Etiket_${activeUsername}_${today}.xlsx`);
+        });
+
+        function renderChart(sheets) {
+            const ctx = document.getElementById('barChart').getContext('2d');
+            if(chartInstance) chartInstance.destroy();
+
+            const chartData = sheets.slice(0, 15);
+            const labels = chartData.map(s => s.name.length > 15 ? s.name.substring(0, 15) + '...' : s.name);
+            const counts = chartData.map(s => s.count);
+
+            const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+            gradient.addColorStop(0, 'rgba(16, 185, 129, 0.9)'); // Emerald Solid
+            gradient.addColorStop(1, 'rgba(16, 185, 129, 0.2)'); // Emerald Transparan
+
+            chartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Jumlah Kode Unik',
+                        data: counts,
+                        backgroundColor: gradient,
+                        borderColor: '#059669',
+                        borderWidth: 1,
+                        borderRadius: 6,
+                        hoverBackgroundColor: '#047857'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(4, 120, 87, 0.9)', // Dark emerald
+                            titleFont: { family: "'Plus Jakarta Sans', sans-serif" },
+                            bodyFont: { family: "'Plus Jakarta Sans', sans-serif", weight: 'bold' },
+                            padding: 12,
+                            cornerRadius: 8,
+                            callbacks: { title: ctx => chartData[ctx[0].dataIndex].name }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(16, 185, 129, 0.1)', borderDash: [5, 5] },
+                            ticks: { precision: 0, color: '#065f46' }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: '#065f46' }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderTable(sheets) {
+            totalSheetsBadge.innerHTML = `<i class="fas fa-layer-group mr-1.5"></i> ${sheets.length} Tab Ditemukan`;
+
+            let tableHTML = `
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-primary-50/80 border-b border-primary-200 text-primary-800">
+                                <th class="py-4 px-6 text-xs font-extrabold uppercase tracking-widest w-16 text-center">No</th>
+                                <th class="py-4 px-6 text-xs font-extrabold uppercase tracking-widest">Nama Sheet Target</th>
+                                <th class="py-4 px-6 text-xs font-extrabold uppercase tracking-widest text-right">Kode Ditemukan</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-primary-100">
+            `;
+
+            sheets.forEach((sheet, index) => {
+                const hasCodes = sheet.count > 0;
+                // Badge color based on count (Green vs Gray)
+                const badgeClass = hasCodes ? 'bg-primary-500 text-white shadow-md shadow-primary-500/30' : 'bg-slate-100 text-slate-500 border border-slate-200';
+                
+                tableHTML += `
+                    <tr class="hover:bg-white/60 transition-colors group">
+                        <td class="py-4 px-6 font-semibold text-primary-400 text-center">${index + 1}</td>
+                        <td class="py-4 px-6">
+                            <div class="flex items-center gap-3">
+                                <span class="font-bold text-primary-900 text-[15px] truncate max-w-[250px] sm:max-w-md" title="${sheet.name}">
+                                    ${sheet.name}
+                                </span>
+                                <button class="copy-btn w-8 h-8 rounded-lg text-primary-300 hover:text-primary-700 hover:bg-primary-100 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 focus:opacity-100" data-name="${sheet.name}" title="Salin Nama Tab">
+                                    <i class="far fa-copy"></i>
+                                </button>
+                            </div>
+                        </td>
+                        <td class="py-4 px-6 text-right">
+                            <div class="inline-flex items-center justify-center min-w-[3rem] px-3 py-1.5 rounded-lg ${badgeClass} text-sm font-extrabold tracking-wide">
+                                ${sheet.count.toLocaleString('id-ID')}
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            tableHTML += `</tbody></table></div>`;
+            sheetsContainer.innerHTML = tableHTML;
+
+            // Bind Event Copy
+            document.querySelectorAll('.copy-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const name = e.currentTarget.getAttribute('data-name');
+                    
+                    // Fallback copy logic untuk iframe/browser lama
+                    try {
+                        navigator.clipboard.writeText(name);
+                    } catch(err) {
+                        const textArea = document.createElement("textarea");
+                        textArea.value = name;
+                        document.body.appendChild(textArea);
+                        textArea.select();
+                        document.execCommand("copy");
+                        document.body.removeChild(textArea);
+                    }
+                    
+                    toastMsg.textContent = `"${name}" disalin!`;
+                    toast.classList.remove('translate-x-[120%]', 'opacity-0');
+                    setTimeout(() => toast.classList.add('translate-x-[120%]', 'opacity-0'), 3000);
+                });
+            });
+        }
+    </script>
+</body>
+</html>
